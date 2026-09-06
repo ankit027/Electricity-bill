@@ -1036,22 +1036,52 @@ function getDrivePreviewUrl(url){
   return url;
 }
 
-function saveBillFile(){
+async function saveBillFile(){
   const external=document.getElementById('billViewerExternal');
+  const title=document.getElementById('billViewerTitle');
+
   if(!external || !external.href || external.href==='#'){
     alert('Bill file link is not available.');
     return;
   }
 
-  // Open the original Google Drive file in a new tab.
-  // Google Drive provides the file's own Download/Save controls.
-  const a=document.createElement('a');
-  a.href=external.href;
-  a.target='_blank';
-  a.rel='noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const originalUrl=external.href;
+  const fileName=(title?.textContent||'Electricity_Bill').replace(/[\\/:*?"<>|]/g,'_');
+
+  // Google Drive file ID -> direct download URL.
+  const match=String(originalUrl).match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const downloadUrl=(match && match[1])
+    ? 'https://drive.google.com/uc?export=download&id='+match[1]
+    : originalUrl;
+
+  try{
+    // Try downloading the file directly to the user's device.
+    const response=await fetch(downloadUrl);
+    if(!response.ok) throw new Error('Download request failed');
+
+    const blob=await response.blob();
+    const objectUrl=URL.createObjectURL(blob);
+
+    const a=document.createElement('a');
+    a.href=objectUrl;
+    a.download=fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+
+  }catch(error){
+    // Browser/Google Drive restrictions can block cross-origin download.
+    // In that case open Google's direct download endpoint.
+    const a=document.createElement('a');
+    a.href=downloadUrl;
+    a.target='_blank';
+    a.rel='noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
 }
 
 function openBillViewer(url,name,type){
@@ -1103,7 +1133,7 @@ document.addEventListener('keydown',(e)=>{
     <div class="bill-modal-header">
       <div id="billViewerTitle" class="bill-modal-title">Electricity Bill</div>
       <div class="bill-modal-actions">
-        <button id="billViewerSave" class="bill-modal-btn bill-modal-open" type="button" onclick="saveBillFile()">💾 Save Bill</button>
+        <button id="billViewerSave" class="bill-modal-btn bill-modal-open" type="button" onclick="saveBillFile()">⬇️ Download Bill</button>
         <a id="billViewerExternal" class="bill-modal-btn bill-modal-open" href="#" target="_blank" rel="noopener">Open in Drive</a>
         <button class="bill-modal-btn bill-modal-close" type="button" onclick="closeBillViewer()">✕ Close</button>
       </div>
