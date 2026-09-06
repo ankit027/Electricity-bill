@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Electricity Bill Splitter</title>
+<style>
+:root{
+  --bg:#f4f7fb; --card:#fff; --ink:#172033; --muted:#667085;
+  --accent:#2563eb; --accent2:#14b8a6; --border:#e5eaf2;
+  --danger:#dc2626; --shadow:0 10px 30px rgba(23,32,51,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(135deg,#123b7a,#2563eb);color:#fff;padding:24px 16px}
+.wrap{max-width:1100px;margin:auto}
+h1{margin:0;font-size:26px}.sub{opacity:.85;margin-top:6px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:18px 0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+.card h2{font-size:18px;margin:0 0 14px}
+.card h3{font-size:16px;margin:0 0 12px}
+.fields{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.fields.three{grid-template-columns:repeat(3,1fr)}
+label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px}
+input,select{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:#fff}
+input:focus{outline:2px solid #bfdbfe;border-color:#60a5fa}
+button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;cursor:pointer}
+.primary{background:var(--accent);color:#fff}.secondary{background:#e8eefb;color:#1e40af}
+.danger{background:#fee2e2;color:#b91c1c}.btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
+.meters{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.meter{border:1px solid var(--border);border-radius:14px;padding:15px;background:#fff}
+.meter:nth-child(1){border-top:4px solid #2563eb}.meter:nth-child(2){border-top:4px solid #14b8a6}.meter:nth-child(3){border-top:4px solid #f59e0b}
+.result{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{border-radius:14px;padding:15px;background:#f8fafc;border:1px solid var(--border)}
+.kpi span{display:block;font-size:12px;color:var(--muted);font-weight:700}.kpi strong{display:block;font-size:22px;margin-top:6px}
+table{width:100%;border-collapse:collapse;margin-top:14px}
+th,td{padding:12px 10px;border-bottom:1px solid var(--border);text-align:right}
+th:first-child,td:first-child{text-align:left}
+tfoot td{font-weight:800;background:#f8fafc}
+.history-item{padding:12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:12px}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#e8eefb;color:#1e40af;font-size:12px;font-weight:700}
+.warning{background:#fff7ed;border:1px solid #fed7aa;padding:12px;border-radius:10px;color:#9a3412;margin-top:12px;display:none}
+.dashboard-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.chart-row{display:grid;grid-template-columns:150px 1fr 110px;align-items:center;gap:10px;margin:12px 0}
+.bar-bg{height:28px;background:#eef2f7;border-radius:8px;overflow:hidden}
+.bar{height:100%;background:linear-gradient(90deg,#2563eb,#14b8a6);border-radius:8px;display:flex;align-items:center;padding-left:10px;color:white;font-size:12px;font-weight:700}
+.month-table td,.month-table th{text-align:center}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+.chart-card{border:1px solid var(--border);border-radius:14px;padding:14px;background:#fff}
+.chart-card h3{margin-bottom:8px}
+.chart-canvas{width:100%;height:280px;display:block}
+@media(max-width:800px){.chart-grid{grid-template-columns:1fr}.chart-canvas{height:250px}}
+.filter-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:14px}
+.filter-row>div{min-width:220px}
+@media(max-width:800px){.dashboard-kpis{grid-template-columns:1fr 1fr}.chart-row{grid-template-columns:90px 1fr 80px}}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.meters{grid-template-columns:1fr}.result{grid-template-columns:1fr 1fr}.fields.three{grid-template-columns:1fr}.fields{grid-template-columns:1fr}}
+@media print{header,.btnrow,.note,.warning{display:none!important}body{background:#fff}.card{box-shadow:none;border:1px solid #ddd}.grid{display:block}.grid>.card{margin-bottom:12px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>⚡ Electricity Bill Splitter</h1>
+  <div class="sub">One Main Meter • 3 Sub Meters • Bi-Monthly Billing • Offline • Data saved on this device</div>
+</div></header>
+
+<main class="wrap">
+<div class="grid">
+  <section class="card">
+    <h2>🧾 Main Electricity Bill</h2>
+    <div class="fields">
+      <div><label>Billing Period (2-Month Cycle)</label>
+<select id="month">
+  <option value="" selected>Select billing period</option>
+  <option value="Jun-Jul 2026">Jun-Jul 2026</option>
+  <option value="Aug-Sep 2026">Aug-Sep 2026</option>
+  <option value="Oct-Nov 2026">Oct-Nov 2026</option>
+  <option value="Dec-Jan 2026-2027">Dec-Jan 2026-2027</option>
+  <option value="Feb-Mar 2027">Feb-Mar 2027</option>
+  <option value="Apr-May 2027">Apr-May 2027</option>
+  <option value="Jun-Jul 2027">Jun-Jul 2027</option>
+  <option value="Aug-Sep 2027">Aug-Sep 2027</option>
+  <option value="Oct-Nov 2027">Oct-Nov 2027</option>
+  <option value="Dec-Jan 2027-2028">Dec-Jan 2027-2028</option>
+  <option value="Feb-Mar 2028">Feb-Mar 2028</option>
+  <option value="Apr-May 2028">Apr-May 2028</option>
+  <option value="Jun-Jul 2028">Jun-Jul 2028</option>
+  <option value="Aug-Sep 2028">Aug-Sep 2028</option>
+  <option value="Oct-Nov 2028">Oct-Nov 2028</option>
+  <option value="Dec-Jan 2028-2029">Dec-Jan 2028-2029</option>
+  <option value="Feb-Mar 2029">Feb-Mar 2029</option>
+  <option value="Apr-May 2029">Apr-May 2029</option>
+  <option value="Jun-Jul 2029">Jun-Jul 2029</option>
+  <option value="Aug-Sep 2029">Aug-Sep 2029</option>
+  <option value="Oct-Nov 2029">Oct-Nov 2029</option>
+  <option value="Dec-Jan 2029-2030">Dec-Jan 2029-2030</option>
+</select></div>
+      <div><label>Total Bill Amount (₹) — Auto Calculated</label><input id="billAmount" type="number" step="0.01" readonly></div>
+      <div><label>Main Meter Previous Reading</label><input id="mainPrev" type="number"></div>
+      <div><label>Main Meter Present Reading</label><input id="mainCurrent" type="number"></div>
+      <div><label>Total Consumption Units — Auto Calculated</label><input id="totalUnits" type="number" readonly></div>
+      <div><label>Fixed Charges (₹)</label><input id="fixedCharges" type="number" step="0.01" value="30"></div>
+      <div><label>Fuel Charge (₹ per unit)</label><input id="fuelRate" type="number" step="0.01" value="2.30"></div>
+      <div><label>Electricity Duty (%)</label><input id="dutyRate" type="number" step="0.01" value="15"></div>
+      <div><label>Additional/Common Charges (₹) – optional</label><input id="commonCharges" type="number" step="0.01" value="0"></div>
+    </div>
+    <div class="note">Enter only Main Meter Previous Reading and Present Reading. Total Consumption Units = Present Reading − Previous Reading and is calculated automatically. Paras consumption is automatically calculated as the remaining units after Himmat and Ashok. The Total Bill Amount is then calculated automatically using the 2-month tariff slabs, fuel charge and electricity duty.</div>
+  </section>
+
+  <section class="card">
+    <h2>📊 Tariff Slabs</h2>
+    <table>
+      <tr><th>Units</th><th>Rate</th></tr>
+      <tr><td>First 100 units (2-month bill)</td><td>₹3.05 / unit</td></tr>
+      <tr><td>Next 100 units (101–200)</td><td>₹3.50 / unit</td></tr>
+      <tr><td>Next 300 units (201–500)</td><td>₹4.15 / unit</td></tr>
+      <tr><td>Above 500 units</td><td>₹5.20 / unit</td></tr>
+    </table>
+    <div class="note">For this 2-month bill, slabs are doubled. Fuel charge is ₹2.30 per unit and Electricity Duty is 15% of Fixed + Energy + Fuel charges.</div>
+  </section>
+</div>
+
+<section class="card">
+  <h2>🔢 Calculated Bill Breakdown</h2>
+  <div class="result">
+    <div class="kpi"><span>Fixed Charges</span><strong id="calcFixed">₹0</strong></div>
+    <div class="kpi"><span>Energy Charges</span><strong id="calcEnergy">₹0</strong></div>
+    <div class="kpi"><span>Fuel Charges</span><strong id="calcFuel">₹0</strong></div>
+    <div class="kpi"><span>Electricity Duty</span><strong id="calcDuty">₹0</strong></div>
+  </div>
+  <div class="note">Calculated Total: <b id="calcTotal">₹0</b> • Difference from entered bill: <b id="calcDifference">₹0</b></div>
+</section>
+
+<section class="card">
+  <h2>🏠 Three Brother Sub-Meters</h2>
+  <div class="meters">
+    <div class="meter">
+      <h3><input id="name1" value="Himmat" style="border:0;padding:0;font-weight:700;font-size:16px"></h3>
+      <label>Previous Reading</label><input id="prev1" type="number" placeholder="0">
+      <label style="margin-top:10px">Present Reading</label><input id="cur1" type="number" placeholder="0">
+    </div>
+    <div class="meter">
+      <h3><input id="name2" value="Ashok" style="border:0;padding:0;font-weight:700;font-size:16px"></h3>
+      <label>Previous Reading</label><input id="prev2" type="number" placeholder="0">
+      <label style="margin-top:10px">Present Reading</label><input id="cur2" type="number" placeholder="0">
+    </div>
+    <div class="meter">
+      <h3><input id="name3" value="Paras" style="border:0;padding:0;font-weight:700;font-size:16px"></h3>
+      <label>Previous Reading</label><input id="prev3" type="number" placeholder="0">
+      <label style="margin-top:10px">Present Reading</label><input id="cur3" type="number" placeholder="0">
+    </div>
+  </div>
+  <div class="card" style="margin:0 0 18px 0">
+<h2>📄 Electricity Bill Copy</h2>
+<div class="note">Upload the original bill as a PDF or photo. It will be included when you press Calculate.</div>
+<div class="fields" style="margin-top:12px"><div style="grid-column:1/-1">
+<label>Upload Bill (PDF / Photo)</label><input id="billFile" type="file" accept="application/pdf,image/*">
+<div id="billFileInfo" class="note" style="margin-top:8px">No bill file selected.</div>
+<div id="billPreview" style="margin-top:10px"></div>
+</div></div></div>
+<div class="card" style="margin:0 0 18px 0">
+<h2>📁 Uploaded Bills</h2>
+<div class="note">View all uploaded electricity bills and filter them by billing period.</div>
+<div class="fields" style="margin-top:12px">
+  <div>
+    <label>Billing Period</label>
+    <select id="billMonthFilter" onchange="renderUploadedBills()">
+      <option value="">All Billing Periods</option>
+    </select>
+  </div>
+</div>
+<div id="uploadedBillsList" style="margin-top:16px"></div>
+</div>
+<div class="card" style="margin:0 0 18px 0">
+<h2>☁️ Cloud Sync</h2>
+<div class="note">Paste your Google Apps Script Web App <b>/exec</b> URL once. Your bills remain saved offline and will also sync to Google Sheets.</div>
+<div class="fields" style="margin-top:12px">
+  <div style="grid-column:1/-1"><label>Google Apps Script Web App URL</label><input id="cloudUrl" type="url" value="https://script.google.com/macros/s/AKfycbwGIuHHMCoctf8K0SCfqM4D_5xYUK_2AC7J47jnqYSqtTZH8asE4N4STQrnaOSdAHoTtQ/exec" placeholder="https://script.google.com/macros/s/.../exec"></div>
+</div>
+<div class="btnrow">
+  <button type="button" onclick="saveCloudUrl()">💾 Save Cloud Link</button>
+  <button type="button" onclick="syncToCloud()">☁️ Sync to Cloud</button>
+  <button type="button" onclick="loadFromCloud()">🔄 Refresh from Cloud</button>
+</div>
+<div id="cloudStatus" class="note" style="margin-top:10px">Cloud not connected yet.</div>
+</div>
+<div class="btnrow">
+    <button class="primary" onclick="calculateAndSave()">Calculate Split</button>
+    <button class="secondary" onclick="saveMonth()">Save This Bill</button>
+    <button class="secondary" onclick="loadSample()">Load Sample Bill</button>
+    <button class="secondary" onclick="window.print()">Print / Save PDF</button>
+    <button class="danger" onclick="clearData()">Clear Saved History</button>
+  </div>
+  <div class="warning" id="warning"></div>
+</section>
+
+<section class="card">
+  <h2>💰 Bill Split Result</h2>
+  <div class="result">
+    <div class="kpi"><span>Main Reading Difference</span><strong id="mainDiff">0</strong></div>
+    <div class="kpi"><span>Total Sub-Meter Units</span><strong id="subTotal">0</strong></div>
+    <div class="kpi"><span>Unaccounted/Common Units</span><strong id="commonUnits">0</strong></div>
+    <div class="kpi"><span>Actual Bill Amount</span><strong id="actualBill">₹0</strong></div>
+    <div class="kpi"><span>Split Difference</span><strong id="splitDifference">₹0</strong></div>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>Member</th><th>Units Used</th><th>Share %</th><th>Energy Charges (Slab Share)</th><th>Fuel Share</th><th>Duty Share</th><th>Fixed Share</th><th>Amount to Pay</th>
+    </tr></thead>
+    <tbody id="results"></tbody>
+    <tfoot><tr><td>Total</td><td id="tfootUnits">0</td><td>100%</td><td id="tfootSlab">₹0</td><td id="tfootFuel">₹0</td><td id="tfootDuty">₹0</td><td id="tfootFixed">₹0</td><td id="tfootPay">₹0</td></tr></tfoot>
+  </table>
+  <div class="note"><b>Slab-based split method:</b> The app first calculates the complete household bill using the 2-month slabs. The resulting <b>Energy Charges</b> are then shared according to each person's sub-meter units, so the three energy shares add exactly to the main Energy Charges. Fuel charges are also shared by units, Fixed Charges are divided equally, and Electricity Duty is calculated on each person's allocated charges. The final <b>Split Difference</b> checks that Himmat + Ashok + Paras equals the Main Bill exactly.</div>
+</section>
+
+<section class="card">
+  <h2>📊 Electricity Dashboard</h2>
+  <div class="filter-row">
+    <div>
+      <label>Filter by Billing Period</label>
+      <select id="dashboardMonth" onchange="renderDashboard()">
+        <option value="ALL">All Billing Periods</option>
+      </select>
+    </div>
+    <button class="secondary" onclick="exportExcel()">Export Dashboard Data to Excel</button>
+  </div>
+
+  <div class="dashboard-kpis">
+    <div class="kpi"><span>Total Bills</span><strong id="dashBills">0</strong></div>
+    <div class="kpi"><span>Total Amount Paid</span><strong id="dashOverall">₹0</strong></div>
+    <div class="kpi"><span>Average Bill</span><strong id="dashAverage">₹0</strong></div>
+    <div class="kpi"><span>Selected Periods</span><strong id="dashMonths">0</strong></div>
+  </div>
+
+  <h3>Brother-wise Amount Paid</h3>
+  <div id="brotherChart" class="note">Save bills to view the dashboard.</div>
+
+  <h3 style="margin-top:24px">Billing Period-wise Brother Amount</h3>
+  <div style="overflow-x:auto">
+    <table class="month-table">
+      <thead>
+        <tr><th>Month</th><th>Himmat</th><th>Ashok</th><th>Paras</th><th>Overall Bill</th></tr>
+      </thead>
+      <tbody id="monthWiseTable"></tbody>
+      <tfoot><tr><td>Total</td><td id="totalHimmat">₹0</td><td id="totalAshok">₹0</td><td id="totalParas">₹0</td><td id="totalOverall">₹0</td></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>📈 Bi-Monthly Overall Bill</h3>
+      <canvas id="overallChart" class="chart-canvas"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>📊 Brother-wise Billing Period Comparison</h3>
+      <canvas id="brotherMonthChart" class="chart-canvas"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>🥧 Overall Contribution Share</h3>
+      <canvas id="shareChart" class="chart-canvas"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>📉 Bi-Monthly Bill Trend</h3>
+      <canvas id="trendChart" class="chart-canvas"></canvas>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>🕘 Saved Bill History</h2>
+  <div id="history" class="note">No saved bills yet.</div>
+</section>
+</main>
+
+<script>
+const ids = ['month','billAmount','mainPrev','mainCurrent','totalUnits','fixedCharges','fuelRate','dutyRate','commonCharges','name1','prev1','cur1','name2','prev2','cur2','name3','prev3','cur3'];
+
+function val(id){ return parseFloat(document.getElementById(id).value) || 0; }
+function money(x){ return '₹' + Number(x||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function slabCost(u){
+  let cost=0;
+  let a=Math.min(u,100); cost+=a*3.05; u-=a;
+  if(u>0){a=Math.min(u,100);cost+=a*3.50;u-=a;}
+  if(u>0){a=Math.min(u,300);cost+=a*4.15;u-=a;}
+  if(u>0)cost+=u*5.20;
+  return cost;
+}
+function billBreakdown(units){
+  const fixed=val('fixedCharges');
+  const fuelRate=val('fuelRate');
+  const dutyRate=val('dutyRate')/100;
+  const energy=slabCost(units);
+  const fuel=units*fuelRate;
+  const duty=(fixed+energy+fuel)*dutyRate;
+  const total=fixed+energy+fuel+duty;
+  return {fixed,energy,fuel,duty,total};
+}
+
+function calculate(){
+  const mainPrev=val('mainPrev'), mainCur=val('mainCurrent');
+  const mainDiff=Math.max(0,mainCur-mainPrev);
+  const totalUnits=mainDiff;
+  const common=val('commonCharges');
+  document.getElementById('totalUnits').value=totalUnits.toFixed(0);
+  const breakdown=billBreakdown(totalUnits);
+  const bill=breakdown.total;
+  document.getElementById('billAmount').value=bill.toFixed(2);
+  document.getElementById('calcFixed').textContent=money(breakdown.fixed);
+  document.getElementById('calcEnergy').textContent=money(breakdown.energy);
+  document.getElementById('calcFuel').textContent=money(breakdown.fuel);
+  document.getElementById('calcDuty').textContent=money(breakdown.duty);
+  document.getElementById('calcTotal').textContent=money(breakdown.total);
+  document.getElementById('calcDifference').textContent=money(bill-breakdown.total);
+  // Himmat and Ashok use their actual sub-meter readings.
+  // Paras is assigned the remaining units from the main meter.
+  const hUnits=Math.max(0,val('cur1')-val('prev1'));
+  const aUnits=Math.max(0,val('cur2')-val('prev2'));
+  const rawParasUnits=totalUnits-hUnits-aUnits;
+  const pUnits=Math.max(0,rawParasUnits);
+
+  const rows=[
+    {name:document.getElementById('name1').value||'Himmat',units:hUnits},
+    {name:document.getElementById('name2').value||'Ashok',units:aUnits},
+    {name:document.getElementById('name3').value||'Paras',units:pUnits}
+  ];
+
+  // Display Paras's automatically calculated consumption.
+  const parasPrev=val('prev3');
+  const parasCurrent=document.getElementById('cur3');
+  if(parasCurrent) parasCurrent.value=(parasPrev+pUnits).toFixed(0);
+
+  // The three shares always reconcile to the main meter units.
+  const subTotal=totalUnits;
+  const warn=document.getElementById('warning');
+  warn.style.display='none'; warn.innerHTML='';
+  if(totalUnits===0){
+    warn.style.display='block'; warn.innerHTML='Enter Main Meter Previous and Present readings first.';
+  }
+  if(rawParasUnits<0){
+    warn.style.display='block'; warn.innerHTML='⚠️ Himmat + Ashok units are greater than the main meter consumption. Please check their readings.';
+  }
+  // Component-wise split. Each variable charge is allocated by actual sub-meter usage.
+  // This guarantees that all three shares add back exactly to the calculated main bill.
+  let html='', payTotal=0, slabTotal=0, fuelTotal=0, dutyTotal=0, fixedTotal=0;
+  rows.forEach((r,index)=>{
+    const pct=subTotal ? r.units/subTotal : 0;
+
+    // Slab energy charge share: proportional share of the TOTAL household slab calculation.
+    // Therefore the three energy shares always add exactly to the main energy charge.
+    const energyShare=breakdown.energy*pct;
+    const fuelShare=breakdown.fuel*pct;
+
+    // Fixed charge is divided equally between the three households.
+    const fixedShare=rows.length ? breakdown.fixed/rows.length : 0;
+
+    // Electricity duty is calculated on each person's allocated taxable base.
+    const dutyShare=(energyShare+fuelShare+fixedShare)*(val('dutyRate')/100);
+
+    // Reconciliation adjustment only on the final member for rounding.
+    let pay=energyShare+fuelShare+fixedShare+dutyShare;
+    if(index===rows.length-1 && subTotal>0){
+      const previousTotal=rows.slice(0,index).reduce((sum,rr)=>{
+        const q=rr.units/subTotal;
+        const e=breakdown.energy*q, f=breakdown.fuel*q, fx=breakdown.fixed/rows.length;
+        return sum+e+f+fx+(e+f+fx)*(val('dutyRate')/100);
+      },0);
+      pay=bill-previousTotal;
+    }
+
+    payTotal+=pay; slabTotal+=energyShare; fuelTotal+=fuelShare;
+    dutyTotal+=dutyShare; fixedTotal+=fixedShare;
+    html+=`<tr>
+      <td><b>${escapeHtml(r.name)}</b></td>
+      <td>${r.units.toFixed(0)}</td>
+      <td>${(pct*100).toFixed(2)}%</td>
+      <td>${money(energyShare)}</td>
+      <td>${money(fuelShare)}</td>
+      <td>${money(dutyShare)}</td>
+      <td>${money(fixedShare)}</td>
+      <td><b>${money(pay)}</b></td>
+    </tr>`;
+  });
+  document.getElementById('results').innerHTML=html;
+  document.getElementById('mainDiff').textContent=mainDiff.toFixed(0);
+  document.getElementById('subTotal').textContent=subTotal.toFixed(0);
+  document.getElementById('commonUnits').textContent=Math.max(0,totalUnits-subTotal).toFixed(0);
+  document.getElementById('actualBill').textContent=money(bill);
+  document.getElementById('tfootUnits').textContent=subTotal.toFixed(0);
+  document.getElementById('tfootSlab').textContent=money(slabTotal);
+  document.getElementById('tfootFuel').textContent=money(fuelTotal);
+  document.getElementById('tfootDuty').textContent=money(dutyTotal);
+  document.getElementById('tfootFixed').textContent=money(fixedTotal);
+  document.getElementById('tfootPay').textContent=money(payTotal);
+  document.getElementById('splitDifference').textContent=money(bill-payTotal);
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function getData(){
+  const data={}; ids.forEach(id=>data[id]=document.getElementById(id).value);
+  const bill=val('billAmount'), common=val('commonCharges');
+  const distributable=Math.max(0,bill-common);
+  const rows=[];
+  for(let i=1;i<=3;i++){
+    rows.push({
+      name:document.getElementById('name'+i).value||['Himmat','Ashok','Paras'][i-1],
+      units:Math.max(0,val('cur'+i)-val('prev'+i))
+    });
+  }
+  const total=rows.reduce((a,b)=>a+b.units,0);
+  data.payments=rows.map(r=>({
+    name:r.name,
+    units:r.units,
+    amount:total ? distributable*(r.units/total)+(common/3) : (common/3)
+  }));
+  data.savedAt=new Date().toLocaleString('en-IN');
+  return data;
+}
+function saveMonth(){
+  calculate();
+  const selectedMonth=document.getElementById('month').value;
+  if(!selectedMonth){alert('Please select a 2-month billing period first.');return;}
+  let all=JSON.parse(localStorage.getItem('electricityBills')||'[]');
+  const data=getData();
+  const monthKey=(data.month||'').trim().toLowerCase();
+  all=all.filter(x=>(x.month||'').trim().toLowerCase()!==monthKey);
+  all.unshift(data);
+  localStorage.setItem('electricityBills',JSON.stringify(all));
+  renderHistory();
+  renderDashboard();
+  alert('Bill saved successfully. If this month already existed, it was updated.');
+}
+function renderHistory(){
+  const all=JSON.parse(localStorage.getItem('electricityBills')||'[]');
+  const box=document.getElementById('history');
+  if(!all.length){box.textContent='No saved bills yet.';return;}
+  box.innerHTML=all.map((x,i)=>`<div class="history-item"><div><b>${escapeHtml(x.month||'Unnamed Bill')}</b><br><span class="badge">${x.savedAt}</span></div><div><b>${money(x.billAmount)}</b><br><button class="secondary" onclick="restoreBill(${i})">Load</button></div></div>`).join('');
+}
+function restoreBill(i){
+  const all=JSON.parse(localStorage.getItem('electricityBills')||'[]'), x=all[i];
+  ids.forEach(id=>{if(x[id]!==undefined)document.getElementById(id).value=x[id];});
+  calculate(); window.scrollTo({top:0,behavior:'smooth'});
+}
+function getPaymentByName(x,name){
+  if(x.payments && Array.isArray(x.payments)){
+    const found=x.payments.find(p=>(p.name||'').toLowerCase()===name.toLowerCase());
+    return found ? Number(found.amount||0) : 0;
+  }
+  return 0;
+}
+function setupCanvas(canvas){
+  const rect=canvas.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,rect.width*dpr);
+  canvas.height=Math.max(1,rect.height*dpr);
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,w:rect.width,h:rect.height};
+}
+function clearCanvas(id){
+  const c=document.getElementById(id);
+  if(!c)return null;
+  const o=setupCanvas(c);
+  o.ctx.clearRect(0,0,o.w,o.h);
+  return o;
+}
+function drawEmpty(id,text='Save monthly bills to view chart'){
+  const o=clearCanvas(id); if(!o)return;
+  const {ctx,w,h}=o;
+  ctx.fillStyle='#667085';ctx.font='14px Arial';ctx.textAlign='center';
+  ctx.fillText(text,w/2,h/2);
+}
+function shortMoney(v){
+  if(v>=100000)return '₹'+(v/100000).toFixed(1)+'L';
+  if(v>=1000)return '₹'+(v/1000).toFixed(1)+'k';
+  return '₹'+Math.round(v);
+}
+function drawLineChart(id,labels,values,title){
+  if(!values.length){drawEmpty(id);return;}
+  const {ctx,w,h}=clearCanvas(id), pad={l:48,r:18,t:28,b:48};
+  const max=Math.max(...values,1)*1.12, min=0;
+  ctx.strokeStyle='#e5eaf2';ctx.lineWidth=1;
+  for(let i=0;i<5;i++){
+    const y=pad.t+(h-pad.t-pad.b)*i/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();
+    const val=max-(max-min)*i/4;
+    ctx.fillStyle='#667085';ctx.font='11px Arial';ctx.textAlign='right';
+    ctx.fillText(shortMoney(val),pad.l-6,y+4);
+  }
+  const chartW=w-pad.l-pad.r, chartH=h-pad.t-pad.b;
+  const pts=values.map((v,i)=>({
+    x:pad.l+(values.length===1?chartW/2:i*chartW/(values.length-1)),
+    y:pad.t+chartH-(v/max)*chartH
+  }));
+  ctx.strokeStyle='#2563eb';ctx.lineWidth=3;ctx.beginPath();
+  pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+  pts.forEach((p,i)=>{
+    ctx.fillStyle='#2563eb';ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#667085';ctx.font='10px Arial';ctx.textAlign='center';
+    ctx.fillText(labels[i],p.x,h-20);
+  });
+  ctx.fillStyle='#172033';ctx.font='bold 13px Arial';ctx.textAlign='left';ctx.fillText(title,pad.l,pad.t-10);
+}
+function drawGroupedBarChart(id,labels,series){
+  if(!labels.length){drawEmpty(id);return;}
+  const {ctx,w,h}=clearCanvas(id), pad={l:42,r:15,t:35,b:50};
+  const all=series.flatMap(s=>s.values), max=Math.max(...all,1)*1.15;
+  const colors=['#2563eb','#14b8a6','#f59e0b'];
+  const chartW=w-pad.l-pad.r, chartH=h-pad.t-pad.b;
+  ctx.strokeStyle='#e5eaf2';ctx.lineWidth=1;
+  for(let i=0;i<5;i++){const y=pad.t+chartH*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
+  const groupW=chartW/labels.length, gap=Math.max(2,groupW*0.08), barW=Math.max(4,(groupW-gap*2)/series.length);
+  labels.forEach((lab,i)=>{
+    const gx=pad.l+i*groupW+gap;
+    series.forEach((s,j)=>{
+      const v=s.values[i]||0, bh=(v/max)*chartH, x=gx+j*barW, y=pad.t+chartH-bh;
+      ctx.fillStyle=colors[j];ctx.fillRect(x,y,barW-2,bh);
+    });
+    ctx.fillStyle='#667085';ctx.font='10px Arial';ctx.textAlign='center';
+    ctx.fillText(lab,pad.l+i*groupW+groupW/2,h-22);
+  });
+  series.forEach((s,j)=>{
+    const x=pad.l+j*90;ctx.fillStyle=colors[j];ctx.fillRect(x,pad.t-26,10,10);
+    ctx.fillStyle='#172033';ctx.font='11px Arial';ctx.textAlign='left';ctx.fillText(s.name,x+14,pad.t-17);
+  });
+}
+function drawPieChart(id,items){
+  if(!items.length || items.reduce((s,x)=>s+x.value,0)<=0){drawEmpty(id);return;}
+  const {ctx,w,h}=clearCanvas(id), total=items.reduce((s,x)=>s+x.value,0);
+  const colors=['#2563eb','#14b8a6','#f59e0b'];
+  const cx=w*0.36, cy=h*0.52, r=Math.min(w,h)*0.28;
+  let start=-Math.PI/2;
+  items.forEach((item,i)=>{
+    const angle=(item.value/total)*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,start,start+angle);ctx.closePath();
+    ctx.fillStyle=colors[i];ctx.fill();
+    start+=angle;
+  });
+  items.forEach((item,i)=>{
+    const y=45+i*42;
+    ctx.fillStyle=colors[i];ctx.fillRect(w*0.68,y,12,12);
+    ctx.fillStyle='#172033';ctx.font='12px Arial';ctx.textAlign='left';
+    ctx.fillText(item.name+' '+(item.value/total*100).toFixed(1)+'%',w*0.68+18,y+10);
+    ctx.fillStyle='#667085';ctx.font='11px Arial';
+    ctx.fillText(money(item.value),w*0.68+18,y+25);
+  });
+}
+function drawDashboardCharts(records,totals){
+  if(!records.length){
+    ['overallChart','brotherMonthChart','shareChart','trendChart'].forEach(id=>drawEmpty(id));
+    return;
+  }
+  const chronological=[...records].reverse();
+  const labels=chronological.map(x=>x.month||'Bill');
+  const overall=chronological.map(x=>Number(x.billAmount)||0);
+  const himmat=chronological.map(x=>getPaymentByName(x,'Himmat'));
+  const ashok=chronological.map(x=>getPaymentByName(x,'Ashok'));
+  const paras=chronological.map(x=>getPaymentByName(x,'Paras'));
+
+  drawLineChart('overallChart',labels,overall,'Overall electricity bill');
+  drawGroupedBarChart('brotherMonthChart',labels,[
+    {name:'Himmat',values:himmat},
+    {name:'Ashok',values:ashok},
+    {name:'Paras',values:paras}
+  ]);
+  drawPieChart('shareChart',[
+    {name:'Himmat',value:totals.Himmat},
+    {name:'Ashok',value:totals.Ashok},
+    {name:'Paras',value:totals.Paras}
+  ]);
+  drawLineChart('trendChart',labels,overall,'Billing trend');
+}
+
+function renderDashboard(){
+  const all=JSON.parse(localStorage.getItem('electricityBills')||'[]');
+  const select=document.getElementById('dashboardMonth');
+  const current=select.value||'ALL';
+  const months=[...new Set(all.map(x=>x.month||'Unnamed Bill'))];
+  select.innerHTML='<option value="ALL">All Billing Periods</option>'+months.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+  select.value=months.includes(current)?current:'ALL';
+
+  const filtered=select.value==='ALL'?all:all.filter(x=>(x.month||'Unnamed Bill')===select.value);
+  const totals={Himmat:0,Ashok:0,Paras:0};
+  filtered.forEach(x=>{
+    totals.Himmat+=getPaymentByName(x,'Himmat');
+    totals.Ashok+=getPaymentByName(x,'Ashok');
+    totals.Paras+=getPaymentByName(x,'Paras');
+  });
+  const overall=filtered.reduce((s,x)=>s+(Number(x.billAmount)||0),0);
+  const max=Math.max(totals.Himmat,totals.Ashok,totals.Paras,1);
+
+  document.getElementById('dashBills').textContent=filtered.length;
+  document.getElementById('dashOverall').textContent=money(overall);
+  document.getElementById('dashAverage').textContent=money(filtered.length?overall/filtered.length:0);
+  document.getElementById('dashMonths').textContent=filtered.length;
+
+  document.getElementById('brotherChart').innerHTML=filtered.length?
+    ['Himmat','Ashok','Paras'].map(name=>`
+      <div class="chart-row">
+        <b>${name}</b>
+        <div class="bar-bg"><div class="bar" style="width:${Math.max(3,(totals[name]/max)*100)}%">${money(totals[name])}</div></div>
+        <b>${money(totals[name])}</b>
+      </div>`).join('')
+    :'No saved bills yet.';
+
+  const sorted=[...filtered].reverse();
+  document.getElementById('monthWiseTable').innerHTML=sorted.map(x=>{
+    const h=getPaymentByName(x,'Himmat'), a=getPaymentByName(x,'Ashok'), p=getPaymentByName(x,'Paras');
+    return `<tr><td><b>${escapeHtml(x.month||'Unnamed')}</b></td><td>${money(h)}</td><td>${money(a)}</td><td>${money(p)}</td><td><b>${money(Number(x.billAmount)||0)}</b></td></tr>`;
+  }).join('');
+
+  document.getElementById('totalHimmat').textContent=money(totals.Himmat);
+  document.getElementById('totalAshok').textContent=money(totals.Ashok);
+  document.getElementById('totalParas').textContent=money(totals.Paras);
+  document.getElementById('totalOverall').textContent=money(overall);
+  drawDashboardCharts(filtered,totals);
+}
+function exportExcel(){
+  const all=JSON.parse(localStorage.getItem('electricityBills')||'[]');
+  if(!all.length){alert('Save at least one bill before exporting.');return;}
+  const rows=[['Month','Himmat Units','Himmat Amount','Ashok Units','Ashok Amount','Paras Units','Paras Amount','Total Bill Units','Overall Bill Amount','Main Previous Reading','Main Present Reading','Saved At']];
+  all.forEach(x=>{
+    const payment=(name)=>x.payments?.find(p=>(p.name||'').toLowerCase()===name.toLowerCase())||{units:0,amount:0};
+    const h=payment('Himmat'),a=payment('Ashok'),p=payment('Paras');
+    rows.push([
+      x.month||'',h.units,h.amount,a.units,a.amount,p.units,p.amount,
+      x.totalUnits||'',x.billAmount||'',x.mainPrev||'',x.mainCurrent||'',x.savedAt||''
+    ]);
+  });
+  const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;link.download='electricity_bill_dashboard_data.csv';link.click();
+  URL.revokeObjectURL(url);
+}
+function clearData(){
+  if(confirm('Delete all saved bill history from this device?')){localStorage.removeItem('electricityBills');renderHistory();renderDashboard();}
+}
+function loadSample(){
+  document.getElementById('month').value='Jun-Jul 2026';
+  document.getElementById('fixedCharges').value='30';
+  document.getElementById('fuelRate').value='2.30';
+  document.getElementById('dutyRate').value='15';
+  document.getElementById('mainPrev').value='31074';
+  document.getElementById('mainCurrent').value='31965';
+  
+  document.getElementById('commonCharges').value='0';
+  calculate();
+}
+calculate();renderHistory();renderDashboard();window.addEventListener('resize',()=>renderDashboard());
+['mainPrev','mainCurrent','fixedCharges','fuelRate','dutyRate','commonCharges','prev1','cur1','prev2','cur2','prev3'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener('input',calculate);
+});
+
+
+
+let selectedBillFile=null, selectedBillData=null;
+function readBillFile(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});}
+document.addEventListener('DOMContentLoaded',()=>{
+ const input=document.getElementById('billFile'); if(!input)return;
+ input.addEventListener('change',async()=>{
+  const file=input.files?.[0]||null; selectedBillFile=file; selectedBillData=null;
+  const info=document.getElementById('billFileInfo'), preview=document.getElementById('billPreview'); preview.innerHTML='';
+  if(!file){info.textContent='No bill file selected.';return;}
+  info.textContent=`Selected: ${file.name} (${Math.round(file.size/1024)} KB)`;
+  try{selectedBillData=await readBillFile(file);
+   if(file.type.startsWith('image/')) preview.innerHTML=`<img src="${selectedBillData}" style="max-width:100%;max-height:260px;border-radius:10px">`;
+   else preview.innerHTML='<div class="note">📄 PDF selected and ready to save.</div>';
+  }catch(e){info.textContent='Could not read selected file.';}
+ });
+});
+
+// ================= CALCULATE & SAVE =================
+async function calculateAndSave(){
+  // First complete all calculations, including Paras remaining units.
+  calculate();
+
+  const total=Number(document.getElementById('totalUnits').value)||0;
+  const h=Math.max(0,val('cur1')-val('prev1'));
+  const a=Math.max(0,val('cur2')-val('prev2'));
+  const paras=Math.max(0,total-h-a);
+
+  // Explicitly display Paras units/readings where the app has these fields.
+  const pPrev=document.getElementById('prev3');
+  const pCur=document.getElementById('cur3');
+  if(pCur && pPrev) pCur.value=(val('prev3')+paras).toFixed(0);
+
+  // Recalculate once more after display update.
+  calculate();
+
+  // Save offline first, then cloud.
+  if(typeof saveMonth==='function') saveMonth();
+
+  const url=getCloudUrl();
+  if(!url){
+    setCloudStatus('✓ Calculated and saved offline. Add your cloud link to sync.');
+    return;
+  }
+
+  try{
+    setCloudStatus('Saving calculation to cloud...');
+    const response=await fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(buildCloudData())
+    });
+    const result=await response.json();
+    if(!result.success) throw new Error(result.error||'Cloud save failed');
+
+    // Refresh dashboard/history from cloud after successful save.
+    await loadFromCloud(true);
+    setCloudStatus('✓ Calculated, saved to cloud and dashboard refreshed.');
+  }catch(error){
+    console.error(error);
+    setCloudStatus('✓ Calculated and saved offline. Cloud sync failed.');
+    alert('Calculation saved offline, but cloud sync failed.');
+  }
+}
+
+// ================= CLOUD SYNC =================
+const DEFAULT_CLOUD_URL='https://script.google.com/macros/s/AKfycbwGIuHHMCoctf8K0SCfqM4D_5xYUK_2AC7J47jnqYSqtTZH8asE4N4STQrnaOSdAHoTtQ/exec';
+function getCloudUrl(){ return (localStorage.getItem('electricityCloudUrl')||DEFAULT_CLOUD_URL).trim(); }
+function setCloudStatus(msg){ const el=document.getElementById('cloudStatus'); if(el) el.textContent=msg; }
+function saveCloudUrl(){
+  const url=(document.getElementById('cloudUrl').value||'').trim();
+  if(!url || !url.includes('/exec')){ alert('Please paste a valid Google Apps Script Web App URL ending in /exec'); return; }
+  localStorage.setItem('electricityCloudUrl',url);
+  setCloudStatus('Cloud link saved. Ready to sync.');
+}
+function currentPayments(){
+  const data=getData();
+  if(data && data.payments) return data.payments;
+  return [];
+}
+function buildCloudData(){
+  calculate();
+  const totalUnits=Number(document.getElementById('totalUnits').value)||0;
+  const hUnits=Math.max(0,val('cur1')-val('prev1'));
+  const aUnits=Math.max(0,val('cur2')-val('prev2'));
+  const pUnits=Math.max(0,totalUnits-hUnits-aUnits);
+  const payments=currentPayments();
+  const findAmount=(name)=> {
+    const x=payments.find(p=>String(p.name).toLowerCase()===name.toLowerCase());
+    return x ? Number(x.amount)||0 : 0;
+  };
+  return {
+    month:document.getElementById('month').value,
+    mainPrev:val('mainPrev'),
+    mainCurrent:val('mainCurrent'),
+    totalUnits,
+    billAmount:val('billAmount'),
+    himmatPrev:val('prev1'),
+    himmatCurrent:val('cur1'),
+    himmatUnits:hUnits,
+    himmatAmount:findAmount(document.getElementById('name1').value||'Himmat'),
+    ashokPrev:val('prev2'),
+    ashokCurrent:val('cur2'),
+    ashokUnits:aUnits,
+    ashokAmount:findAmount(document.getElementById('name2').value||'Ashok'),
+    parasUnits:pUnits,
+    parasAmount:findAmount(document.getElementById('name3').value||'Paras'),
+    fixedCharges:val('fixedCharges'),
+    fuelRate:val('fuelRate'),
+    dutyRate:val('dutyRate'),
+    billFileName:selectedBillFile ? selectedBillFile.name : '',
+    billFileType:selectedBillFile ? selectedBillFile.type : '',
+    billFileData:selectedBillData || ''
+  };
+}
+async function syncToCloud(){
+  const url=getCloudUrl();
+  if(!url){ alert('First paste and save your Google Apps Script /exec URL.'); return; }
+  if(!document.getElementById('month').value){ alert('Please select a billing period first.'); return; }
+  saveMonth();
+  setCloudStatus('Syncing to cloud...');
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(buildCloudData())});
+    const result=await r.json();
+    if(!result.success) throw new Error(result.error||'Cloud sync failed');
+    setCloudStatus('✓ Synced successfully. Refreshing dashboard...');
+    await loadFromCloud(true);
+    setCloudStatus('✓ Cloud synced and dashboard refreshed.');
+  }catch(err){
+    console.error(err);
+    setCloudStatus('Offline/cloud unavailable. Data is safely saved on this device.');
+    alert('Cloud sync failed, but your data was saved offline.');
+  }
+}
+function num(v){ const n=Number(v); return Number.isFinite(n)?n:0; }
+async function loadFromCloud(silent=false){
+  const url=getCloudUrl();
+  if(!url){ if(!silent) alert('First paste and save your Google Apps Script /exec URL.'); return; }
+  setCloudStatus('Loading latest cloud data...');
+  try{
+    const r=await fetch(url+(url.includes('?')?'&':'?')+'t='+Date.now(),{cache:'no-store'});
+    const result=await r.json();
+    if(!result.success) throw new Error(result.error||'Could not load cloud data');
+    const records=(result.data||[]).map(x=>({
+      month:x['Billing Period']||'',
+      mainPrev:num(x['Main Previous Reading']),
+      mainCurrent:num(x['Main Present Reading']),
+      totalUnits:num(x['Total Units']),
+      billAmount:num(x['Bill Amount']),
+      himmatCurrent:num(x['Himmat Present Reading']),
+      ashokCurrent:num(x['Ashok Present Reading']),
+      fixedCharges:num(x['Fixed Charges']),
+      fuelRate:num(x['Fuel Rate']),
+      dutyRate:num(x['Duty Rate']),
+      payments:[
+        {name:'Himmat',units:num(x['Himmat Units']),amount:num(x['Himmat Amount'])},
+        {name:'Ashok',units:num(x['Ashok Units']),amount:num(x['Ashok Amount'])},
+        {name:'Paras',units:num(x['Paras Units']),amount:num(x['Paras Amount'])}
+      ],
+      savedAt:x['Saved At']||'',
+      billFileName:x['Bill File Name']||'',
+      billFileUrl:x['Bill File URL']||'',
+      billFileUrl:x['Bill File URL']||''
+    }));
+    localStorage.setItem('electricityBills',JSON.stringify(records));
+
+    // When reopening the app, use the latest saved present readings as the next previous readings.
+    if(records.length){
+      const latest=records[records.length-1];
+      // Only carry forward the readings requested for the next billing cycle.
+      document.getElementById('mainPrev').value=num(latest.mainCurrent);
+      document.getElementById('prev1').value=num((latest.himmatCurrent!==undefined)?latest.himmatCurrent:0);
+      document.getElementById('prev2').value=num((latest.ashokCurrent!==undefined)?latest.ashokCurrent:0);
+      // Do not prefill any new current readings, bill values or sample data.
+      document.getElementById('mainCurrent').value='';
+      document.getElementById('cur1').value='';
+      document.getElementById('cur2').value='';
+      document.getElementById('totalUnits').value='';
+      document.getElementById('billAmount').value='';
+    }
+
+    renderHistory(); renderDashboard(); if(typeof renderUploadedBills==='function') renderUploadedBills();
+    setCloudStatus(`✓ Loaded ${records.length} billing period(s) from cloud.`);
+    return records;
+  }catch(err){
+    console.error(err);
+    setCloudStatus('Could not refresh cloud. Showing offline data.');
+    if(!silent) alert('Could not load cloud data. Your offline data is still available.');
+    return null;
+  }
+}
+
+window.addEventListener('load',()=>{
+  const saved=getCloudUrl();
+  const input=document.getElementById('cloudUrl');
+  if(input) input.value=saved;
+  if(saved) loadFromCloud(true);
+});
+
+
+// ================= UPLOADED BILLS =================
+function getSavedBillRecords(){
+  try { return JSON.parse(localStorage.getItem('electricityBills') || '[]'); }
+  catch(e){ return []; }
+}
+function updateBillMonthFilter(){
+  const select=document.getElementById('billMonthFilter');
+  if(!select) return;
+  const old=select.value;
+  const months=[...new Set(getSavedBillRecords().map(x=>x.month).filter(Boolean))];
+  select.innerHTML='<option value="">All Billing Periods</option>';
+  months.forEach(m=>{
+    const option=document.createElement('option');
+    option.value=m; option.textContent=m;
+    select.appendChild(option);
+  });
+  if(months.includes(old)) select.value=old;
+}
+function renderUploadedBills(){
+  updateBillMonthFilter();
+  const box=document.getElementById('uploadedBillsList');
+  if(!box) return;
+  const filter=document.getElementById('billMonthFilter')?.value || '';
+  let records=getSavedBillRecords();
+  if(filter) records=records.filter(x=>String(x.month)===String(filter));
+  records=records.filter(x=>x.billFileUrl);
+  if(!records.length){
+    box.innerHTML='<div class="note">No uploaded bill found for the selected billing period.</div>';
+    return;
+  }
+  box.innerHTML='';
+  records.forEach(x=>{
+    const card=document.createElement('div');
+    card.style.cssText='border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:14px;margin-bottom:12px';
+    const title=document.createElement('div');
+    title.style.cssText='font-weight:700;font-size:16px';
+    title.textContent='📅 '+(x.month||'Billing Period');
+    const name=document.createElement('div');
+    name.className='note';
+    name.style.margin='7px 0';
+    name.textContent='📄 '+(x.billFileName||'Electricity Bill');
+    const link=document.createElement('a');
+    link.href=x.billFileUrl;
+    link.target='_blank';
+    link.rel='noopener';
+    link.textContent='👁️ Open Uploaded Bill';
+    card.appendChild(title); card.appendChild(name); card.appendChild(link);
+    box.appendChild(card);
+  });
+}
+
+</script>
+</body>
+</html>
