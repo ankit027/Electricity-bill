@@ -195,6 +195,7 @@ tfoot td{font-weight:800;background:#f8fafc}
 <div class="card" style="margin:0 0 18px 0">
 <h2>📁 Uploaded Bills</h2>
 <div class="note">View all uploaded electricity bills and filter them by billing period.</div>
+<div style="margin-top:10px"><button type="button" onclick="refreshUploadedBillsFromCloud()" class="view-bill-btn">🔄 Refresh Uploaded Bills</button></div>
 <div class="fields" style="margin-top:12px">
   <div>
     <label>Billing Period</label>
@@ -740,11 +741,24 @@ async function calculateAndSave(){
       body:JSON.stringify(buildCloudData())
     });
     const result=await response.json();
-    if(!result.success) throw new Error(result.error||'Cloud save failed');
+    if(!result.success) throw new Error(result.error||result.message||'Cloud save failed');
+
+    // Save the returned Drive link immediately so the uploaded bill can be viewed
+    // even before the next cloud refresh.
+    const uploadedUrl=result.fileUrl||result.billFileUrl||'';
+    const uploadedName=result.fileName||result.billFileName||
+      (selectedBillFile ? selectedBillFile.name : '');
+    if(uploadedUrl){
+      upsertUploadedBillLocal(document.getElementById('month').value,uploadedName,uploadedUrl);
+      if(typeof renderUploadedBills==='function') renderUploadedBills();
+    }
 
     // Refresh dashboard/history from cloud after successful save.
     await loadFromCloud(true);
-    setCloudStatus('✓ Calculated, saved to cloud and dashboard refreshed.');
+    if(typeof renderUploadedBills==='function') renderUploadedBills();
+    setCloudStatus(uploadedUrl
+      ? '✓ Calculated, saved to cloud and bill uploaded successfully.'
+      : '✓ Calculated and saved to cloud.');
   }catch(error){
     console.error(error);
     setCloudStatus('✓ Calculated and saved offline. Cloud sync failed.');
@@ -822,6 +836,39 @@ async function syncToCloud(){
   }
 }
 function num(v){ const n=Number(v); return Number.isFinite(n)?n:0; }
+
+function cloudField(row, names){
+  if(!row) return '';
+  for(const name of names){
+    if(Object.prototype.hasOwnProperty.call(row,name) && row[name]!==null && row[name]!==undefined){
+      return row[name];
+    }
+  }
+  const normalized={};
+  Object.keys(row).forEach(k=>{
+    normalized[String(k).toLowerCase().replace(/[^a-z0-9]/g,'')]=row[k];
+  });
+  for(const name of names){
+    const key=String(name).toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(Object.prototype.hasOwnProperty.call(normalized,key)) return normalized[key];
+  }
+  return '';
+}
+
+function upsertUploadedBillLocal(month, fileName, fileUrl){
+  if(!month || !fileUrl) return;
+  let records=[];
+  try{ records=JSON.parse(localStorage.getItem('electricityBills')||'[]'); }catch(e){}
+  const record=records.find(x=>String(x.month)===String(month));
+  if(record){
+    record.billFileName=fileName||record.billFileName||'Electricity Bill';
+    record.billFileUrl=fileUrl;
+  }else{
+    records.push({month:String(month),billFileName:fileName||'Electricity Bill',billFileUrl:fileUrl,payments:[]});
+  }
+  localStorage.setItem('electricityBills',JSON.stringify(records));
+}
+
 async function loadFromCloud(silent=false){
   const url=getCloudUrl();
   if(!url){ if(!silent) alert('First paste and save your Google Apps Script /exec URL.'); return; }
@@ -847,10 +894,9 @@ async function loadFromCloud(silent=false){
         {name:'Paras',units:num(x['Paras Units']),amount:num(x['Paras Amount'])}
       ],
       savedAt:x['Saved At']||'',
-      billFileName:x['Bill File Name']||'',
-      billFileUrl:x['Bill File URL']||'',
-      billFileType:x['Bill File Type']||'',
-      billFileUrl:x['Bill File URL']||''
+      billFileName:cloudField(x,['Bill File Name','BillFileName','File Name'])||'',
+      billFileUrl:cloudField(x,['Bill File URL','Bill File Url','BillFileURL','BillFileUrl','File URL','File Url'])||'',
+      billFileType:cloudField(x,['Bill File Type','BillFileType','File Type'])||''
     }));
     localStorage.setItem('electricityBills',JSON.stringify(records));
 
@@ -906,6 +952,12 @@ function updateBillMonthFilter(){
   });
   if(months.includes(old)) select.value=old;
 }
+
+async function refreshUploadedBillsFromCloud(){
+  await loadFromCloud(true);
+  renderUploadedBills();
+}
+
 function renderUploadedBills(){
   updateBillMonthFilter();
   const box=document.getElementById('uploadedBillsList');
@@ -913,9 +965,13 @@ function renderUploadedBills(){
   const filter=document.getElementById('billMonthFilter')?.value || '';
   let records=getSavedBillRecords();
   if(filter) records=records.filter(x=>String(x.month)===String(filter));
-  records=records.filter(x=>x.billFileUrl);
+  const matchingRecords=records.slice();
+  records=records.filter(x=>String(x.billFileUrl||'').trim());
   if(!records.length){
-    box.innerHTML='<div class="note">No uploaded bill found for the selected billing period.</div>';
+    const hasFileName=matchingRecords.some(x=>String(x.billFileName||'').trim());
+    box.innerHTML=hasFileName
+      ? '<div class="note">The bill file name is saved, but its Google Drive link is missing. Click 🔄 Refresh Uploaded Bills after updating/redeploying Apps Script.</div>'
+      : '<div class="note">No uploaded bill found for the selected billing period.</div>';
     return;
   }
   box.innerHTML='';
