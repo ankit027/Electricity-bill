@@ -1036,21 +1036,22 @@ function getDrivePreviewUrl(url){
   return url;
 }
 
-function printBillViewer(){
-  const body=document.getElementById('billViewerBody');
-  const iframe=body ? body.querySelector('iframe') : null;
-  if(iframe){
-    try{
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      return;
-    }catch(e){}
-  }
+function saveBillFile(){
   const external=document.getElementById('billViewerExternal');
-  if(external && external.href){
-    const w=window.open(external.href,'_blank');
-    if(w) w.focus();
+  if(!external || !external.href || external.href==='#'){
+    alert('Bill file link is not available.');
+    return;
   }
+
+  // Open the original Google Drive file in a new tab.
+  // Google Drive provides the file's own Download/Save controls.
+  const a=document.createElement('a');
+  a.href=external.href;
+  a.target='_blank';
+  a.rel='noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 function openBillViewer(url,name,type){
@@ -1102,7 +1103,7 @@ document.addEventListener('keydown',(e)=>{
     <div class="bill-modal-header">
       <div id="billViewerTitle" class="bill-modal-title">Electricity Bill</div>
       <div class="bill-modal-actions">
-        <button id="billViewerPrint" class="bill-modal-btn bill-modal-open" type="button" onclick="printBillViewer()">🖨️ Print</button>
+        <button id="billViewerSave" class="bill-modal-btn bill-modal-open" type="button" onclick="saveBillFile()">💾 Save Bill</button>
         <a id="billViewerExternal" class="bill-modal-btn bill-modal-open" href="#" target="_blank" rel="noopener">Open in Drive</a>
         <button class="bill-modal-btn bill-modal-close" type="button" onclick="closeBillViewer()">✕ Close</button>
       </div>
