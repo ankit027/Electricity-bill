@@ -877,27 +877,34 @@ async function loadFromCloud(silent=false){
     const r=await fetch(url+(url.includes('?')?'&':'?')+'t='+Date.now(),{cache:'no-store'});
     const result=await r.json();
     if(!result.success) throw new Error(result.error||'Could not load cloud data');
-    const records=(result.data||[]).map(x=>({
-      month:x['Billing Period']||'',
-      mainPrev:num(x['Main Previous Reading']),
-      mainCurrent:num(x['Main Present Reading']),
-      totalUnits:num(x['Total Units']),
-      billAmount:num(x['Bill Amount']),
-      himmatCurrent:num(x['Himmat Present Reading']),
-      ashokCurrent:num(x['Ashok Present Reading']),
-      fixedCharges:num(x['Fixed Charges']),
-      fuelRate:num(x['Fuel Rate']),
-      dutyRate:num(x['Duty Rate']),
-      payments:[
-        {name:'Himmat',units:num(x['Himmat Units']),amount:num(x['Himmat Amount'])},
-        {name:'Ashok',units:num(x['Ashok Units']),amount:num(x['Ashok Amount'])},
-        {name:'Paras',units:num(x['Paras Units']),amount:num(x['Paras Amount'])}
-      ],
-      savedAt:x['Saved At']||'',
-      billFileName:cloudField(x,['Bill File Name','BillFileName','File Name'])||'',
-      billFileUrl:cloudField(x,['Bill File URL','Bill File Url','BillFileURL','BillFileUrl','File URL','File Url'])||'',
-      billFileType:cloudField(x,['Bill File Type','BillFileType','File Type'])||''
-    }));
+    const rawRecords=(result.data||result.records||[]);
+    const records=rawRecords.map(x=>{
+      const monthValue=cloudField(x,['Billing Period','billingPeriod','BillingPeriod','month','Month']);
+      return {
+        month:monthValue ? String(monthValue).trim() : '',
+        mainPrev:num(cloudField(x,['Main Previous Reading','mainPrev'])),
+        mainCurrent:num(cloudField(x,['Main Present Reading','mainCurrent'])),
+        totalUnits:num(cloudField(x,['Total Units','totalUnits'])),
+        billAmount:num(cloudField(x,['Bill Amount','billAmount'])),
+        himmatCurrent:num(cloudField(x,['Himmat Present Reading','himmatCurrent'])),
+        ashokCurrent:num(cloudField(x,['Ashok Present Reading','ashokCurrent'])),
+        fixedCharges:num(cloudField(x,['Fixed Charges','fixedCharges'])),
+        fuelRate:num(cloudField(x,['Fuel Rate','fuelRate'])),
+        dutyRate:num(cloudField(x,['Duty Rate','dutyRate'])),
+        payments:[
+          {name:'Himmat',units:num(cloudField(x,['Himmat Units','himmatUnits'])),amount:num(cloudField(x,['Himmat Amount','himmatAmount']))},
+          {name:'Ashok',units:num(cloudField(x,['Ashok Units','ashokUnits'])),amount:num(cloudField(x,['Ashok Amount','ashokAmount']))},
+          {name:'Paras',units:num(cloudField(x,['Paras Units','parasUnits'])),amount:num(cloudField(x,['Paras Amount','parasAmount']))}
+        ],
+        savedAt:cloudField(x,['Saved At','savedAt'])||'',
+        billFileName:cloudField(x,['Bill File Name','BillFileName','File Name','billFileName','fileName'])||'',
+        billFileUrl:cloudField(x,['Bill File URL','Bill File Url','BillFileURL','BillFileUrl','File URL','File Url','billFileUrl','fileUrl'])||'',
+        billFileType:cloudField(x,['Bill File Type','BillFileType','File Type','billFileType','fileType'])||''
+      };
+    }).filter(r=>{
+      const m=String(r.month||'').trim().toLowerCase();
+      return r.month && m!=='billing period' && m!=='month';
+    });
     localStorage.setItem('electricityBills',JSON.stringify(records));
 
     // When reopening the app, use the latest saved present readings as the next previous readings.
@@ -916,7 +923,8 @@ async function loadFromCloud(silent=false){
     }
 
     renderHistory(); renderDashboard(); if(typeof renderUploadedBills==='function') renderUploadedBills();
-    setCloudStatus(`✓ Loaded ${records.length} billing period(s) from cloud.`);
+    const billsWithLinks=records.filter(r=>String(r.billFileUrl||'').trim()).length;
+    setCloudStatus(`✓ Loaded ${records.length} billing period(s) from cloud. ${billsWithLinks} bill link(s) found.`);
     return records;
   }catch(err){
     console.error(err);
@@ -959,32 +967,47 @@ async function refreshUploadedBillsFromCloud(){
 }
 
 function renderUploadedBills(){
-  updateBillMonthFilter();
   const box=document.getElementById('uploadedBillsList');
-  if(!box) return;
-  const filter=document.getElementById('billMonthFilter')?.value || '';
-  let records=getSavedBillRecords();
-  if(filter) records=records.filter(x=>String(x.month)===String(filter));
-  const matchingRecords=records.slice();
+  const select=document.getElementById('billMonthFilter');
+  if(!box || !select) return;
+
+  const oldFilter=select.value||'';
+  const all=getSavedBillRecords().filter(x=>{
+    const m=String((x&&x.month)||'').trim().toLowerCase();
+    return m && m!=='billing period' && m!=='month';
+  });
+
+  const months=[...new Set(all.map(x=>String(x.month).trim()))];
+  select.innerHTML='<option value="">All Billing Periods</option>';
+  months.forEach(m=>{
+    const option=document.createElement('option');
+    option.value=m;
+    option.textContent=m;
+    select.appendChild(option);
+  });
+  if(months.includes(oldFilter)) select.value=oldFilter;
+
+  const filter=select.value||'';
+  let records=filter
+    ? all.filter(x=>String(x.month).trim()===String(filter).trim())
+    : all.slice();
+
   records=records.filter(x=>String(x.billFileUrl||'').trim());
+
   if(!records.length){
-    const hasFileName=matchingRecords.some(x=>String(x.billFileName||'').trim());
-    box.innerHTML=hasFileName
-      ? '<div class="note">The bill file name is saved, but its Google Drive link is missing. Click 🔄 Refresh Uploaded Bills after updating/redeploying Apps Script.</div>'
-      : '<div class="note">No uploaded bill found for the selected billing period.</div>';
+    box.innerHTML='<div class="note">No uploaded bill found for the selected billing period.</div>';
     return;
   }
+
   box.innerHTML='';
   records.forEach(x=>{
     const card=document.createElement('div');
     card.style.cssText='border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:14px;margin-bottom:12px';
+
     const title=document.createElement('div');
-    title.style.cssText='font-weight:700;font-size:16px';
-    title.textContent='📅 '+(x.month||'Billing Period');
-    const name=document.createElement('div');
-    name.className='note';
-    name.style.margin='7px 0';
-    name.textContent='📄 '+(x.billFileName||'Electricity Bill');
+    title.style.cssText='font-weight:700;font-size:16px;margin-bottom:10px';
+    title.textContent='📅 '+String(x.month).trim();
+
     const link=document.createElement('button');
     link.type='button';
     link.className='view-bill-btn';
@@ -994,7 +1017,9 @@ function renderUploadedBills(){
       x.billFileName||'Electricity Bill',
       x.billFileType||''
     ));
-    card.appendChild(title); card.appendChild(name); card.appendChild(link);
+
+    card.appendChild(title);
+    card.appendChild(link);
     box.appendChild(card);
   });
 }
@@ -1009,6 +1034,23 @@ function getDrivePreviewUrl(url){
     return 'https://drive.google.com/file/d/'+match[1]+'/preview';
   }
   return url;
+}
+
+function printBillViewer(){
+  const body=document.getElementById('billViewerBody');
+  const iframe=body ? body.querySelector('iframe') : null;
+  if(iframe){
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      return;
+    }catch(e){}
+  }
+  const external=document.getElementById('billViewerExternal');
+  if(external && external.href){
+    const w=window.open(external.href,'_blank');
+    if(w) w.focus();
+  }
 }
 
 function openBillViewer(url,name,type){
@@ -1060,6 +1102,7 @@ document.addEventListener('keydown',(e)=>{
     <div class="bill-modal-header">
       <div id="billViewerTitle" class="bill-modal-title">Electricity Bill</div>
       <div class="bill-modal-actions">
+        <button id="billViewerPrint" class="bill-modal-btn bill-modal-open" type="button" onclick="printBillViewer()">🖨️ Print</button>
         <a id="billViewerExternal" class="bill-modal-btn bill-modal-open" href="#" target="_blank" rel="noopener">Open in Drive</a>
         <button class="bill-modal-btn bill-modal-close" type="button" onclick="closeBillViewer()">✕ Close</button>
       </div>
